@@ -5,7 +5,7 @@ A simple, fast bounded worker pool with unlimited work queue.
 ## Usage
 
 ```go
-p := fast.WorkerPool{Max: 1000}
+p := fwp.WorkerPool{Max: 1000}
 
 p.Go(func() {
     // ...
@@ -15,7 +15,7 @@ p.Go(func() {
 If you need to wait for completion:
 
 ```go
-p := fast.WorkerPool{Max: 1000}
+p := fwp.WorkerPool{Max: 1000}
 var wg sync.WaitGroup
 
 wg.Add(1)
