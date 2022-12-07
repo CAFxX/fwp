@@ -1,4 +1,4 @@
-# Workerpool
+# fwp (fast worker pool)
 
 A simple, fast bounded worker pool with unlimited work queue.
 
