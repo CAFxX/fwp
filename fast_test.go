@@ -10,11 +10,14 @@ import (
 	"github.com/alitto/pond"
 	"github.com/alphadose/itogami"
 	"github.com/gammazero/workerpool"
+	"github.com/intel-go/cpuid"
 	"github.com/panjf2000/ants/v2"
 	"golang.org/x/sync/semaphore"
 )
 
 func TestWorkerPool(t *testing.T) {
+	t.Logf("rtm=%v", cpuid.HasExtendedFeature(cpuid.RTM))
+
 	c := make([]bool, 1<<20)
 	s := fwp.WorkerPool{Max: runtime.GOMAXPROCS(0)}
 	var wg sync.WaitGroup

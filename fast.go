@@ -1,7 +1,11 @@
 package fwp
 
 import (
+	"runtime"
 	"sync"
+
+	rtm "github.com/0xmjk/go-tsx-rtm"
+	"github.com/intel-go/cpuid"
 )
 
 type WorkerPool struct {
@@ -16,14 +20,14 @@ func (s *WorkerPool) Go(fn func()) {
 		go fn()
 		return
 	}
-	s.m.Lock()
+	s.lock()
 	if s.n >= s.Max {
 		s.q.put(fn)
-		s.m.Unlock()
+		s.unlock()
 		return
 	}
 	s.n++
-	s.m.Unlock()
+	s.unlock()
 	go s.worker(fn)
 }
 
@@ -31,7 +35,7 @@ func (s *WorkerPool) worker(fn func()) {
 	for {
 		fn()
 
-		s.m.Lock()
+		s.lock()
 		var ok bool
 		fn, ok = s.q.get()
 		if !ok {
@@ -45,10 +49,10 @@ func (s *WorkerPool) worker(fn func()) {
 				// we consume no memory while we are idle.
 				s.q.reset()
 			}
-			s.m.Unlock()
+			s.unlock()
 			return
 		}
-		s.m.Unlock()
+		s.unlock()
 	}
 }
 
@@ -100,4 +104,23 @@ func next(n, m int) int {
 		return n - m
 	}
 	return n
+}
+
+var tsx = cpuid.HasExtendedFeature(cpuid.RTM)
+
+func (s *WorkerPool) lock() {
+	if runtime.GOARCH == "amd64" && tsx {
+		if rtm.TxBegin() == rtm.TxBeginStarted {
+			return
+		}
+	}
+	s.m.Lock()
+}
+
+func (s *WorkerPool) unlock() {
+	if runtime.GOARCH == "amd64" && tsx && rtm.TxTest() == 1 {
+		rtm.TxEnd()
+		return
+	}
+	s.m.Unlock()
 }
