@@ -1,9 +1,5 @@
 package fwp
 
-import (
-	"sync"
-)
-
 // WorkerPool is a worker pool with bounded workers (up to Max tasks
 // can be running concurrently) and unbounded queue (no limit to the
 // number of tasks waiting for a worker to become available). This is
@@ -14,10 +10,9 @@ type WorkerPool struct {
 	// A value of 0 means no limit, i.e. the WorkerPool behaves exactly
 	// like the native `go` construct.
 	Max int
-
-	m sync.Mutex
-	n int
-	q cbuf
+	m   mutex
+	n   int
+	q   cbuf
 }
 
 // Go submits a task for asynchronous execution by the worker
