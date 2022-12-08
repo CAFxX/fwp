@@ -4,13 +4,35 @@ import (
 	"sync"
 )
 
+// WorkerPool is a worker pool with bounded workers (up to Max tasks
+// can be running concurrently) and unbounded queue (no limit to the
+// number of tasks waiting for a worker to become available). This is
+// similar to how the native `go` construct operates, but with an
+// (optional) bound to the number of tasks executed concurrently.
 type WorkerPool struct {
+	// Max is the maximum number of tasks being executed concurrently.
+	// A value of 0 means no limit, i.e. the WorkerPool behaves exactly
+	// like the native `go` construct.
 	Max int
 	m   sync.Mutex
 	n   int
 	q   cbuf
 }
 
+// Go submits a task for asynchronous execution by the worker
+// pool. It is similar to the native `go` construct.
+//
+// The task will be processed by one the pool workers as
+// soon as one becomes available. WorkerPool (similarly to Go
+// goroutines) provides no guarantees about the order in which
+// tasks are executed (if you need such guarantees, use external
+// synchronization mechanisms, but taking care to not cause
+// deadlocks; you can do this by resubmitting a task to be
+// executed later in case some resources can not be acquired).
+//
+// To wait for one or more tasks to complete use an explicit
+// synchronization mechanism such as channels, sync.WaitGroup,
+// or similar.
 func (s *WorkerPool) Go(fn func()) {
 	if s.Max <= 0 {
 		go fn()
@@ -52,6 +74,31 @@ func (s *WorkerPool) worker(fn func()) {
 	}
 }
 
+// Stats returns statistics about the worker pool.
+func (s *WorkerPool) Stats() Stats {
+	s.m.Lock()
+	r := Stats{
+		Running: s.n,
+		Queued:  s.q.len(),
+	}
+	s.m.Unlock()
+	return r
+}
+
+// Stats contains statistics about the worker pool.
+type Stats struct {
+	// Running is the number of tasks currently being run.
+	// It is never greater than the number of Max workers.
+	Running int
+	// Queued is the number of tasks currently queued, waiting
+	// for a worker to become available for processing.
+	// This number is only bound by the amount of memory available.
+	//
+	// The total number of tasks in the worker pool is therefore
+	// Queued+Running.
+	Queued int
+}
+
 type cbuf struct {
 	e []func()
 	r int
@@ -89,6 +136,13 @@ func (c *cbuf) get() (func(), bool) {
 	v := c.e[c.r]
 	c.r = next(c.r+1, len(c.e))
 	return v, true
+}
+
+func (c *cbuf) len() int {
+	if c.w >= c.r {
+		return c.w - c.r
+	}
+	return len(c.e) - c.r + c.w
 }
 
 func (c *cbuf) reset() {
