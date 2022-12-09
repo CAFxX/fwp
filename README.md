@@ -1,8 +1,9 @@
 # fwp
 
-[![Go Reference](https://pkg.go.dev/badge/github.com/CAFxX/fwp.svg)](https://pkg.go.dev/github.com/CAFxX/fwp)
+[![Go Reference](https://pkg.go.dev/badge/github.com/CAFxX/fwp.svg)][0]
 
-`fwp` (fast worker pool) is a [simple](#usage), [very fast](#performance) bounded worker pool with an unlimited work queue.
+`fwp` (fast worker pool) is a [simple](#usage), [very fast](#performance)
+bounded worker pool with an unlimited work queue.
 
 When the worker pool is idle it consumes no memory (or goroutines).
 
@@ -102,8 +103,8 @@ The performance is due to three factors:
 
 ## TODO
 
-- Use Intel TSX, ARM TME, or similar instructions to further minimize
-  lock contention.
+- Use [Intel TSX][1], [ARM TME][2], or similar mechanisms to further
+  minimize lock contention.
 - Investigate additional regimes:
   - When queue is empty delay worker shutdown by a few ns (or a
     roundtrip to the go scheduler) to wait for new tasks: as long as
@@ -118,3 +119,8 @@ The performance is due to three factors:
 ## License
 
 [MIT](LICENSE)
+
+
+[0]: https://pkg.go.dev/github.com/CAFxX/fwp
+[1]: https://en.wikipedia.org/wiki/Transactional_Synchronization_Extensions
+[2]: https://developer.arm.com/documentation/102873/0100/Overview
