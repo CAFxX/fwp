@@ -16,11 +16,11 @@ type WorkerPool struct {
 	// like the native `go` construct.
 	Max int
 
-	m  sync.Mutex
-	n  int // current number of workers
-	i  int // current number of idle workers
-	ic int // current number of claimed idle workers
-	q  cbuf
+	m                  sync.Mutex
+	workers            int // current number of workers
+	idleWorkers        int // current number of idle workers
+	claimedIdleWorkers int // current number of claimed idle workers
+	q                  cbuf
 }
 
 // Go submits a task for asynchronous execution by the worker
@@ -43,15 +43,15 @@ func (s *WorkerPool) Go(fn func()) {
 		return
 	}
 	s.m.Lock()
-	if s.n >= s.Max || s.i > s.ic {
-		if s.i > s.ic { // is there an idle worker?
-			s.ic++ // claim the idle worker
+	if s.workers >= s.Max || s.idleWorkers > s.claimedIdleWorkers {
+		if s.idleWorkers > s.claimedIdleWorkers { // is there an idle worker?
+			s.claimedIdleWorkers++ // claim the idle worker
 		}
 		s.q.put(fn)
 		s.m.Unlock()
 		return
 	}
-	s.n++
+	s.workers++
 	s.m.Unlock()
 	go s.worker(fn)
 }
@@ -67,19 +67,19 @@ func (s *WorkerPool) worker(fn func()) {
 		if !ok {
 			// The queue is empty. Before shutting down this worker, let's
 			// yield once to the scheduler just to see if any task arrives.
-			s.i++             // signal that one worker is idle
-			s.m.Unlock()      // don't hold the mutex while yielding
-			runtime.Gosched() // yield
-			s.m.Lock()        // acquite the mutex again
-			s.i--             // worker is not idle anymore
-			if s.ic > 0 {     // did a task claim us?
-				s.ic--     // accept the task
-				goto retry // go grab the task from the queue
+			s.idleWorkers++               // signal that one worker is idle
+			s.m.Unlock()                  // don't hold the mutex while yielding
+			runtime.Gosched()             // yield
+			s.m.Lock()                    // acquite the mutex again
+			s.idleWorkers--               // worker is not idle anymore
+			if s.claimedIdleWorkers > 0 { // did a task claim us?
+				s.claimedIdleWorkers-- // accept the task
+				goto retry             // go grab the task from the queue
 			}
 			// We yielded to the scheduler, but no task arrived: shut down
 			// the worker.
-			s.n--
-			if s.n == 0 {
+			s.workers--
+			if s.workers == 0 {
 				// We are the last running worker and we are shutting down
 				// because the work queue is empty: reset the queue
 				// (dropping also any queue storage) so that we do not keep
@@ -99,7 +99,7 @@ func (s *WorkerPool) worker(fn func()) {
 func (s *WorkerPool) Stats() Stats {
 	s.m.Lock()
 	r := Stats{
-		Running: s.n,
+		Running: s.workers - s.idleWorkers,
 		Queued:  s.q.len(),
 	}
 	s.m.Unlock()
