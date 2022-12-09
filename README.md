@@ -1,8 +1,8 @@
 # fwp
 
-[![GoDoc](https://godoc.org/github.com/CAFxX/fwp?status.svg)](https://godoc.org/github.com/CAFxX/fwp)
+[![Go Reference](https://pkg.go.dev/badge/github.com/CAFxX/fwp.svg)](https://pkg.go.dev/github.com/CAFxX/fwp)
 
-`fwp` (fast worker pool) is a simple, very fast bounded worker pool with an unlimited work queue.
+`fwp` (fast worker pool) is a [simple](#usage), [very fast](#performance) bounded worker pool with an unlimited work queue.
 
 When the worker pool is idle it consumes no memory (or goroutines).
 
@@ -70,7 +70,9 @@ p.Go(fn)
 
 ## Performance
 
-`fwp` is pretty fast. Indeed it is faster than any other workerpool tested, and for high volumes of short tasks it can even be faster than spawning goroutines without a semaphore:
+`fwp` is pretty fast. Indeed it is faster than any other workerpool
+tested, and for high volumes of short tasks it can even be faster
+than spawning goroutines without a semaphore:
 
 ```
 name                       time/op
@@ -90,12 +92,28 @@ The performance is due to three factors:
 
 - Goroutines are reused to process multiple tasks (this minimizes
   allocation of new goroutines as well as stack growths).
-- The length of critical sections is kept as short as possible
-  (this minimizes contention on the mutex that guards the internals
-  of the worker pool).
+- The number and length of critical sections is kept as low as
+  possible (this minimizes contention on the mutex that guards the
+  internals of the worker pool).
 - The internal behavior of the pool is adaptive to the workload,
   with 2 different regimes selected automatically based on the
-  number and duration of tasks submitted.
+  number and duration of tasks submitted (this prevents performance
+  cliffs).
+
+## TODO
+
+- Use Intel TSX, ARM TME, or similar instructions to further minimize
+  lock contention.
+- Investigate additional regimes:
+  - When queue is empty delay worker shutdown by a few ns (or a
+    roundtrip to the go scheduler) to wait for new tasks: as long as
+    the delay is shorter than the time it takes for a hypotethical
+    new goroutine to start executing a new task, it should be
+    beneficial.
+- Reduce contention by using sharded queues or global+local queues with
+  work stealing.
+- Use a chunked circular buffer (with chunk reuse). This should avoid
+  copying the queue contents when the buffer needs to grow.
 
 ## License
 

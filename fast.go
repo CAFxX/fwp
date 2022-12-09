@@ -14,9 +14,10 @@ type WorkerPool struct {
 	// A value of 0 means no limit, i.e. the WorkerPool behaves exactly
 	// like the native `go` construct.
 	Max int
-	m   sync.Mutex
-	n   int
-	q   cbuf
+
+	m sync.Mutex
+	n int
+	q cbuf
 }
 
 // Go submits a task for asynchronous execution by the worker
@@ -90,6 +91,7 @@ type Stats struct {
 	// Running is the number of tasks currently being run.
 	// It is never greater than the number of Max workers.
 	Running int
+
 	// Queued is the number of tasks currently queued, waiting
 	// for a worker to become available for processing.
 	// This number is only bound by the amount of memory available.
