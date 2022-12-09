@@ -64,6 +64,20 @@ func BenchmarkFastWorkerPool(b *testing.B) {
 	})
 }
 
+func BenchmarkSPFastWorkerPool(b *testing.B) {
+	s := fwp.WorkerPool{Max: runtime.GOMAXPROCS(0)}
+	var wg sync.WaitGroup
+	fn := func() {
+		// ...
+		wg.Done()
+	}
+	for i := 0; i < b.N; i++ {
+		wg.Add(1)
+		s.Go(fn)
+	}
+	wg.Wait()
+}
+
 func BenchmarkGammazeroWorkerPool(b *testing.B) {
 	wp := workerpool.New(runtime.GOMAXPROCS(0))
 	b.RunParallel(func(pb *testing.PB) {
@@ -257,4 +271,17 @@ func BenchmarkGoroutine(b *testing.B) {
 		}
 		wg.Wait()
 	})
+}
+
+func BenchmarkSPGoroutine(b *testing.B) {
+	var wg sync.WaitGroup
+	fn := func() {
+		// ...
+		wg.Done()
+	}
+	for i := 0; i < b.N; i++ {
+		wg.Add(1)
+		go fn()
+	}
+	wg.Wait()
 }
