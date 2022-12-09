@@ -48,6 +48,36 @@ func TestWorkerPool(t *testing.T) {
 	}
 }
 
+func TestStats(t *testing.T) {
+	p := fwp.WorkerPool{Max: 1}
+	if s := p.Stats(); s.Running != 0 || s.Queued != 0 {
+		t.Fatal(s)
+	}
+	var wg sync.WaitGroup
+	ch := make(chan struct{})
+	wg.Add(1)
+	p.Go(func() { <-ch; wg.Done() })
+	if s := p.Stats(); s.Running != 1 || s.Queued != 0 {
+		t.Fatal(s)
+	}
+	wg.Add(1)
+	p.Go(func() { <-ch; wg.Done() })
+	if s := p.Stats(); s.Running != 1 || s.Queued != 1 {
+		t.Fatal(s)
+	}
+	wg.Add(1)
+	p.Go(func() { <-ch; wg.Done() })
+	if s := p.Stats(); s.Running != 1 || s.Queued != 2 {
+		t.Fatal(s)
+	}
+	close(ch)
+	wg.Wait()
+	runtime.Gosched()
+	if s := p.Stats(); s.Running != 0 || s.Queued != 0 {
+		t.Fatal(s)
+	}
+}
+
 func BenchmarkFastWorkerPool(b *testing.B) {
 	s := fwp.WorkerPool{Max: runtime.GOMAXPROCS(0)}
 	b.RunParallel(func(pb *testing.PB) {
