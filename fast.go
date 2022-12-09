@@ -1,6 +1,7 @@
 package fwp
 
 import (
+	"runtime"
 	"sync"
 )
 
@@ -15,9 +16,11 @@ type WorkerPool struct {
 	// like the native `go` construct.
 	Max int
 
-	m sync.Mutex
-	n int
-	q cbuf
+	m  sync.Mutex
+	n  int // current number of workers
+	i  int // current number of idle workers
+	ic int // current number of claimed idle workers
+	q  cbuf
 }
 
 // Go submits a task for asynchronous execution by the worker
@@ -40,7 +43,10 @@ func (s *WorkerPool) Go(fn func()) {
 		return
 	}
 	s.m.Lock()
-	if s.n >= s.Max {
+	if s.n >= s.Max || s.i > s.ic {
+		if s.i > s.ic { // is there an idle worker?
+			s.ic++ // claim the idle worker
+		}
 		s.q.put(fn)
 		s.m.Unlock()
 		return
@@ -51,13 +57,32 @@ func (s *WorkerPool) Go(fn func()) {
 }
 
 func (s *WorkerPool) worker(fn func()) {
+	idle := false
 	for {
 		fn()
 
 		s.m.Lock()
+	retry:
 		var ok bool
 		fn, ok = s.q.get()
 		if !ok {
+			// The queue is empty. Before shutting down this worker, let's
+			// yield once to the scheduler just to see if any task arrives.
+			if !idle {
+				s.i++             // signal that one worker is idle
+				s.m.Unlock()      // don't hold the mutex while yielding
+				idle = true       // remember we went idle and yielded
+				runtime.Gosched() // yield
+				s.m.Lock()
+				s.i--         // worker is not idle anymore
+				if s.ic > 0 { // did a task claim us?
+					s.ic--       // accept the task
+					idle = false // not idle anymore: yield again when we become idle
+					goto retry   // go grab the task from the queue
+				}
+				// We yielded to the scheduler, but no task arrived. Shut down
+				// the worker.
+			}
 			s.n--
 			if s.n == 0 {
 				// We are the last running worker and we are shutting down
