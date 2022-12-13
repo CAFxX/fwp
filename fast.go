@@ -16,7 +16,9 @@ type WorkerPool struct {
 	Max int
 
 	m sync.Mutex
+	c sync.Cond
 	n int
+	b int
 	q cbuf
 }
 
@@ -68,11 +70,31 @@ func (s *WorkerPool) worker(fn func()) {
 				// we consume no memory while we are idle.
 				s.q.reset()
 			}
+			s.c.L = &s.m		
 			s.m.Unlock()
+			s.c.Signal()
 			return
 		}
 		s.m.Unlock()
 	}
+}
+
+func (s *WorkerPool) MayBlock(fn func()) {
+	s.m.Lock()
+	s.n--
+	s.b++
+	s.m.Unlock()
+	defer func() {
+		s.m.Lock()
+		for s.n >= s.Max {
+			s.c.L = &s.m
+			s.c.Wait()
+		}
+		s.n++
+		s.b--
+		s.m.Unlock()
+	}()
+	fn()
 }
 
 // Stats returns statistics about the worker pool.
@@ -81,6 +103,7 @@ func (s *WorkerPool) Stats() Stats {
 	r := Stats{
 		Running: s.n,
 		Queued:  s.q.len(),
+		Blocked: s.b,
 	}
 	s.m.Unlock()
 	return r
@@ -90,6 +113,8 @@ func (s *WorkerPool) Stats() Stats {
 type Stats struct {
 	// Running is the number of tasks currently being run.
 	// It is never greater than the number of Max workers.
+	// Blocked tasks are not included in the number of Running
+	// tasks.
 	Running int
 
 	// Queued is the number of tasks currently queued, waiting
@@ -97,8 +122,12 @@ type Stats struct {
 	// This number is only bound by the amount of memory available.
 	//
 	// The total number of tasks in the worker pool is therefore
-	// Queued+Running.
+	// Queued+Running+Blocked.
 	Queued int
+	
+	// Blocked is the number of tasks blocked in a MayBlock
+	// function.
+	Blocked int
 }
 
 type cbuf struct {
